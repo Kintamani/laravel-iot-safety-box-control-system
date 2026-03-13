@@ -1,3 +1,25 @@
+## Safety Box CMS
+
+CMS untuk monitoring Safety Box Service Handphone.
+
+### Setup cepat
+1. `cp .env.example .env`
+2. `php artisan key:generate`
+3. `php artisan migrate`
+4. `npm install && npm run dev`
+5. `php artisan serve`
+
+Optional: set `DEVICE_API_KEY` di `.env` lalu kirim header `X-Device-Key` dari device.
+
+### Endpoint perangkat
+- `POST /api/device/heartbeat`
+- `POST /api/device/scan`
+- `POST /api/device/lock`
+- `GET /api/devices`
+- `GET /api/orders/{order}`
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
