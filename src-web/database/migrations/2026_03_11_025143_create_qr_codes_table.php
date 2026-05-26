@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id('qr_id');
             $table->foreignId('order_id')->constrained('service_orders', 'order_id');
             $table->string('qr_code');
-            $table->enum('type', ['Pickup', 'Delivery']);
+            $table->enum('type', ['pickup-open', 'pickup-closed', 'delivery-open', 'delivery-closed'])->default('pickup-open');
             $table->timestamps();
         });
     }

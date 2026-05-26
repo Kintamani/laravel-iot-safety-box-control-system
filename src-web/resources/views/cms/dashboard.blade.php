@@ -12,11 +12,18 @@
             return [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
-                'battery_level' => $device->battery_level,
+                'battery_doorlock' => $device->battery_doorlock,
+                'battery_device' => $device->battery_device,
                 'lat' => isset($coords[0]) && is_numeric($coords[0]) ? (float) $coords[0] : null,
                 'lng' => isset($coords[1]) && is_numeric($coords[1]) ? (float) $coords[1] : null,
             ];
         });
+        $qrTypeLabels = [
+            'pickup-open' => 'Pickup Open',
+            'pickup-closed' => 'Pickup Closed',
+            'delivery-open' => 'Delivery Open',
+            'delivery-closed' => 'Delivery Closed',
+        ];
     @endphp
     <div class="mt-6 grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div class="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm">
@@ -39,7 +46,11 @@
                             </span>
                         </div>
                         <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
-                            <span>Battery: {{ $device->battery_level ?? '--' }}%</span>
+                            <span>Battery Doorlock: {{ $device->battery_doorlock ?? '--' }}%</span>
+                            <span>Last seen: {{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+                            <span>Battery Device: {{ $device->battery_device ?? '--' }}%</span>
                             <span>Last seen: {{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
                         </div>
                     </div>
@@ -109,8 +120,8 @@
                     </form> --}}
                 </div>
 
-                <div class="overflow-hidden rounded-2xl border border-slate-200">
-                    <div class="max-h-[520px] overflow-y-auto">
+                <div class="rounded-2xl border border-slate-200">
+                    <div class="max-h-[520px] overflow-x-visible overflow-y-auto">
                         <table class="w-full text-left text-sm">
                             <thead class="sticky top-0 bg-slate-100 text-xs uppercase tracking-[0.15em] text-slate-500">
                                 <tr>
@@ -125,8 +136,7 @@
                             <tbody class="divide-y divide-slate-200">
                                 @forelse ($orders as $order)
                                     @php
-                                        $pickup = $order->qrCodes->firstWhere('type', 'Pickup');
-                                        $delivery = $order->qrCodes->firstWhere('type', 'Delivery');
+                                        $orderQrs = $order->qrCodes->keyBy('type');
                                     @endphp
                                     <tr class="bg-white/60">
                                         <td class="px-4 py-3 font-medium text-slate-900">#{{ $order->order_id }}</td>
@@ -142,25 +152,33 @@
                                             </span>
                                         </td>
                                         <td class="px-4 py-3 text-xs text-slate-500">
-                                            <p>Pickup: {{ $pickup?->qr_code ? 'Ada' : 'Belum' }}</p>
-                                            <p>Delivery: {{ $delivery?->qr_code ? 'Ada' : 'Belum' }}</p>
+                                            <div class="flex flex-wrap gap-2">
+                                                @foreach ($qrTypeLabels as $qrType => $label)
+                                                    @php
+                                                        $exists = $orderQrs->has($qrType);
+                                                    @endphp
+                                                    <span
+                                                        class="rounded-full px-2 py-1 {{ $exists ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500' }}">
+                                                        {{ $label }}: {{ $exists ? 'Ada' : 'Belum' }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
                                         </td>
                                         <td class="px-4 py-3">
-                                            <div class="flex flex-wrap gap-2">
-                                                <form method="POST" action="{{ route('cms.orders.qr', $order) }}">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <form method="POST" action="{{ route('cms.orders.qr', $order) }}"
+                                                    class="flex flex-wrap items-center gap-2">
                                                     @csrf
-                                                    <input type="hidden" name="type" value="Pickup" />
+                                                    <select name="type"
+                                                        class="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs font-semibold text-slate-700 focus:border-slate-300 focus:outline-none">
+                                                        <option value="pickup-open">Pickup Lock Open</option>
+                                                        <option value="pickup-closed">Pickup Lock Closed</option>
+                                                        <option value="delivery-open">Delivery Lock Open</option>
+                                                        <option value="delivery-closed">Delivery Lock Closed</option>
+                                                    </select>
                                                     <button
                                                         class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300">
-                                                        Generate Pickup
-                                                    </button>
-                                                </form>
-                                                <form method="POST" action="{{ route('cms.orders.qr', $order) }}">
-                                                    @csrf
-                                                    <input type="hidden" name="type" value="Delivery" />
-                                                    <button
-                                                        class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300">
-                                                        Generate Delivery
+                                                        Generate
                                                     </button>
                                                 </form>
                                                 <a href="{{ route('orders.show', $order) }}"
@@ -207,7 +225,10 @@
                         <tr class="bg-white/60">
                             <td class="px-4 py-3 text-slate-600">{{ $log->timestamp?->format('d M Y H:i') ?? '-' }}</td>
                             <td class="px-4 py-3 font-medium text-slate-900">{{ $log->box_id }}</td>
-                            <td class="px-4 py-3 text-slate-600">{{ $log->log_type }}</td>
+                            <td class="px-4 py-3 text-slate-600">
+                                <div>{{ $log->log_type }}</div>
+                                <div class="text-xs text-slate-400">{{ $qrTypeLabels[$log->qrCode?->type] ?? 'Manual / N/A' }}</div>
+                            </td>
                             <td class="px-4 py-3 text-slate-600">
                                 {{ $log->qrCode?->order_id ? '#' . $log->qrCode->order_id : '-' }}
                             </td>
@@ -253,7 +274,7 @@
                 if (!device.lat || !device.lng) {
                     return;
                 }
-                const label = `${device.box_id} • ${device.status} • ${device.battery_level ?? '--'}%`;
+                const label = `${device.box_id} • ${device.status} • Door ${device.battery_doorlock ?? '--'}% • Dev ${device.battery_device ?? '--'}%`;
                 if (markers.has(device.box_id)) {
                     markers.get(device.box_id).setLatLng([device.lat, device.lng]).bindPopup(label);
                 } else {

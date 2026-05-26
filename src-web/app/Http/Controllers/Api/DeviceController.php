@@ -22,7 +22,8 @@ class DeviceController extends Controller
 
         $data = $request->validate([
             'box_id' => ['required', 'string', 'max:255'],
-            'battery_level' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'battery_doorlock' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'battery_device' => ['nullable', 'integer', 'min:0', 'max:100'],
             'lat' => ['nullable', 'numeric'],
             'lng' => ['nullable', 'numeric'],
             'status' => ['nullable', 'in:Available,In Use'],
@@ -31,7 +32,8 @@ class DeviceController extends Controller
         $device = SafetyBoxDevice::updateOrCreate(
             ['box_id' => $data['box_id']],
             [
-                'battery_level' => $data['battery_level'] ?? null,
+                'battery_doorlock' => $data['battery_doorlock'] ?? null,
+                'battery_device' => $data['battery_device'] ?? null,
                 'gps_location' => $this->formatLocation($data['lat'] ?? null, $data['lng'] ?? null),
                 'status' => $data['status'] ?? 'Available',
                 'last_seen' => now(),
@@ -74,11 +76,12 @@ class DeviceController extends Controller
             return $this->deny('QR tidak dikenal.');
         }
 
-        $alreadyUsed = AccessLog::where('scanned_qr_id', $qr->qr_id)
-            ->where('log_type', 'Unlock')
-            ->exists();
+        $action = $this->qrAction($qr->type);
+        if (!$action) {
+            return $this->deny('Tipe QR tidak didukung.');
+        }
 
-        if ($alreadyUsed) {
+        if ($this->hasScanBeenUsed($qr, $action)) {
             return $this->deny('QR sudah digunakan.');
         }
 
@@ -89,23 +92,25 @@ class DeviceController extends Controller
         $this->applyOrderState($qr->order, $qr->type);
 
         $device->update([
-            'status' => $qr->type === 'Pickup' ? 'In Use' : 'Available',
+            'status' => $action === 'unlock' ? 'In Use' : 'Available',
             'last_seen' => now(),
         ]);
 
         AccessLog::create([
             'box_id' => $device->box_id,
             'scanned_qr_id' => $qr->qr_id,
-            'log_type' => 'Unlock',
+            'log_type' => $action === 'unlock' ? 'Unlock' : 'Lock',
             'timestamp' => Carbon::now(),
         ]);
 
         return response()->json([
             'ok' => true,
             'result' => 'valid',
-            'action' => 'unlock',
+            'action' => $action,
             'order_id' => $qr->order_id,
             'qr_type' => $qr->type,
+            'next_qr_type' => $this->nextQrType($qr->type),
+            'message' => $this->successMessage($qr->type),
         ]);
     }
 
@@ -152,7 +157,8 @@ class DeviceController extends Controller
             return [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
-                'battery_level' => $device->battery_level,
+                'battery_doorlock' => $device->battery_doorlock,
+                'battery_device' => $device->battery_device,
                 'last_seen' => optional($device->last_seen)->toIso8601String(),
                 'lat' => $lat,
                 'lng' => $lng,
@@ -189,14 +195,16 @@ class DeviceController extends Controller
                 'status' => $order->status,
                 'phone_model' => $order->phone_model,
             ],
-            'qr_codes' => $order->qrCodes->map(fn (QRCode $qr) => [
+            'qr_codes' => $order->qrCodes->map(fn(QRCode $qr) => [
                 'type' => $qr->type,
                 'qr_code' => $qr->qr_code,
+                'done' => $this->hasQrLog($qr, $this->isOpenQr($qr->type) ? 'Unlock' : 'Lock'),
             ])->values(),
             'device' => $device ? [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
-                'battery_level' => $device->battery_level,
+                'battery_doorlock' => $device->battery_doorlock,
+                'battery_device' => $device->battery_device,
                 'last_seen' => optional($device->last_seen)->toIso8601String(),
                 'lat' => $lat,
                 'lng' => $lng,
@@ -234,11 +242,11 @@ class DeviceController extends Controller
      */
     private function applyOrderState(ServiceOrder $order, string $type): void
     {
-        if ($type === 'Pickup' && $order->status !== 'In Transit') {
+        if ($type === 'pickup-closed' && $order->status !== 'In Transit') {
             $order->update(['status' => 'In Transit']);
         }
 
-        if ($type === 'Delivery' && $order->status !== 'Completed') {
+        if ($type === 'delivery-closed' && $order->status !== 'Completed') {
             $order->update(['status' => 'Completed']);
         }
     }
@@ -249,16 +257,133 @@ class DeviceController extends Controller
     private function isQrAllowed(QRCode $qr): bool
     {
         $status = $qr->order?->status;
+        return match ($qr->type) {
+            'pickup-open' => $status === 'Pending',
+            'pickup-closed' => $status === 'Pending'
+                && $this->hasQrLog($this->pairedOpenQr($qr), 'Unlock'),
+            'delivery-open' => $status === 'In Transit',
+            'delivery-closed' => $status === 'In Transit'
+                && $this->hasQrLog($this->pairedOpenQr($qr), 'Unlock'),
+            default => false,
+        };
+    }
 
-        if ($qr->type === 'Pickup') {
-            return $status === 'Pending';
+    /**
+     * Determine whether the QR triggers an unlock or a completion event.
+     */
+    private function qrAction(string $type): ?string
+    {
+        if ($this->isOpenQr($type)) {
+            return 'unlock';
         }
 
-        if ($qr->type === 'Delivery') {
-            return $status === 'In Transit';
+        if ($this->isClosedQr($type)) {
+            return 'complete';
         }
 
-        return false;
+        return null;
+    }
+
+    /**
+     * Normalize the QR enum into its business stage.
+     */
+    private function qrStage(string $type): ?string
+    {
+        if (str_starts_with($type, 'pickup-')) {
+            return 'Pickup';
+        }
+
+        if (str_starts_with($type, 'delivery-')) {
+            return 'Delivery';
+        }
+
+        return null;
+    }
+
+    /**
+     * Return the next QR type expected by the workflow.
+     */
+    private function nextQrType(string $type): ?string
+    {
+        return match ($type) {
+            'pickup-open' => 'pickup-closed',
+            'delivery-open' => 'delivery-closed',
+            default => null,
+        };
+    }
+
+    /**
+     * Build a success message for the current QR.
+     */
+    private function successMessage(string $type): string
+    {
+        return match ($type) {
+            'pickup-open' => 'Box terbuka. Tutup box lalu scan pickup-closed.',
+            'pickup-closed' => 'Pickup selesai. Order masuk In Transit.',
+            'delivery-open' => 'Box terbuka. Tutup box lalu scan delivery-closed.',
+            'delivery-closed' => 'Delivery selesai. Order Completed.',
+            default => 'QR valid.',
+        };
+    }
+
+    /**
+     * Check whether a QR has already been consumed for its intended action.
+     */
+    private function hasScanBeenUsed(QRCode $qr, string $action): bool
+    {
+        $logType = $action === 'unlock' ? 'Unlock' : 'Lock';
+        return $this->hasQrLog($qr, $logType);
+    }
+
+    /**
+     * Check whether a QR has a specific access log recorded.
+     */
+    private function hasQrLog(?QRCode $qr, string $logType): bool
+    {
+        if (!$qr) {
+            return false;
+        }
+
+        return AccessLog::where('scanned_qr_id', $qr->qr_id)
+            ->where('log_type', $logType)
+            ->exists();
+    }
+
+    /**
+     * Find the matching open QR for a closed QR of the same order.
+     */
+    private function pairedOpenQr(QRCode $qr): ?QRCode
+    {
+        $openType = match ($qr->type) {
+            'pickup-closed' => 'pickup-open',
+            'delivery-closed' => 'delivery-open',
+            default => null,
+        };
+
+        if (!$openType) {
+            return null;
+        }
+
+        return QRCode::where('order_id', $qr->order_id)
+            ->where('type', $openType)
+            ->latest('qr_id')
+            ->first();
+    }
+
+    /**
+     * Determine whether a QR type is an "open" step.
+     */
+    private function isOpenQr(string $type): bool
+    {
+        return str_ends_with($type, '-open');
+    }
+
+    /**
+     * Determine whether a QR type is a "closed" step.
+     */
+    private function isClosedQr(string $type): bool
+    {
+        return str_ends_with($type, '-closed');
     }
 
     /**

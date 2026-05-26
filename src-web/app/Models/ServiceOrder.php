@@ -26,14 +26,14 @@ class ServiceOrder extends Model
     public function pickupQr(): HasOne
     {
         return $this->hasOne(QRCode::class, 'order_id', 'order_id')
-            ->where('type', 'Pickup')
+            ->whereIn('type', ['pickup-open', 'pickup-closed'])
             ->latest('qr_id');
     }
 
     public function deliveryQr(): HasOne
     {
         return $this->hasOne(QRCode::class, 'order_id', 'order_id')
-            ->where('type', 'Delivery')
+            ->whereIn('type', ['delivery-open', 'delivery-closed'])
             ->latest('qr_id');
     }
 }

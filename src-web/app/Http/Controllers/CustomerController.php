@@ -12,7 +12,7 @@ class CustomerController extends Controller
      */
     public function show(ServiceOrder $order)
     {
-        $order->load('qrCodes');
+        $order->load('qrCodes.accessLogs');
 
         $qrIds = $order->qrCodes->pluck('qr_id');
         $lastLog = AccessLog::with('device')

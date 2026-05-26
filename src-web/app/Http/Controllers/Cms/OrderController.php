@@ -11,6 +11,13 @@ use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
+    private const QR_TYPES = [
+        'pickup-open',
+        'pickup-closed',
+        'delivery-open',
+        'delivery-closed',
+    ];
+
     /**
      * Store a new service order from the CMS form.
      */
@@ -88,7 +95,7 @@ class OrderController extends Controller
     public function generateQr(Request $request, ServiceOrder $order): RedirectResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'in:Pickup,Delivery'],
+            'type' => ['required', 'in:' . implode(',', self::QR_TYPES)],
         ]);
 
         QRCode::where('order_id', $order->order_id)
@@ -103,7 +110,7 @@ class OrderController extends Controller
             'type' => $data['type'],
         ]);
 
-        return back()->with('status', "QR {$data['type']} berhasil dibuat.");
+        return back()->with('status', 'QR ' . str_replace('-', ' ', $data['type']) . ' berhasil dibuat.');
     }
 
     /**

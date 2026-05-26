@@ -15,13 +15,15 @@ class SafetyBoxDevice extends Model
     protected $fillable = [
         'box_id',
         'status',
-        'battery_level',
+        'battery_doorlock',
+        'battery_device',
         'gps_location',
         'last_seen',
     ];
 
     protected $casts = [
-        'battery_level' => 'integer',
+        'battery_doorlock' => 'integer',
+        'battery_device' => 'integer',
         'last_seen' => 'datetime',
     ];
 
