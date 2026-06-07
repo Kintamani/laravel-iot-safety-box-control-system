@@ -12,17 +12,19 @@
             return [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
+                'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
+                'last_seen' => $device->last_seen?->diffForHumans(),
                 'lat' => isset($coords[0]) && is_numeric($coords[0]) ? (float) $coords[0] : null,
                 'lng' => isset($coords[1]) && is_numeric($coords[1]) ? (float) $coords[1] : null,
             ];
         });
         $qrTypeLabels = [
-            'pickup-open' => 'Pickup Open',
-            'pickup-closed' => 'Pickup Closed',
-            'delivery-open' => 'Delivery Open',
-            'delivery-closed' => 'Delivery Closed',
+            'pickup-open' => 'Pickup to Outlet',
+            'pickup-closed' => 'Delivery to Outlet',
+            'delivery-open' => 'Delivery to Customer',
+            'delivery-closed' => 'Order Completed',
         ];
     @endphp
     <div class="mt-6 grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -38,20 +40,44 @@
             <h2 class="text-xl font-semibold text-slate-900">Safety Box Devices</h2>
             <div class="mt-4 max-h-96 space-y-3 overflow-y-auto pr-1">
                 @forelse ($devices as $device)
-                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    @php
+                        $coords = $device->gps_location ? explode(',', $device->gps_location) : [null, null];
+                        $lat = isset($coords[0]) && is_numeric($coords[0]) ? (float) $coords[0] : null;
+                        $lng = isset($coords[1]) && is_numeric($coords[1]) ? (float) $coords[1] : null;
+                        $doorOpen = $device->door_status === 'Open';
+                    @endphp
+                    <div id="device-card-{{ $device->box_id }}" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                         <div class="flex items-center justify-between">
                             <p class="text-sm font-semibold text-slate-900">{{ $device->box_id }}</p>
-                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                            <span id="device-status-{{ $device->box_id }}"
+                                class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                                 {{ $device->status }}
                             </span>
                         </div>
                         <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
-                            <span>Battery Doorlock: {{ $device->battery_doorlock ?? '--' }}%</span>
-                            <span>Last seen: {{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
+                            <span class="inline-flex items-center gap-2">
+                        <span id="device-door-dot" class="h-2.5 w-2.5 rounded-full {{ $doorOpen ? 'bg-emerald-500' : ($device?->door_status === 'Closed' ? 'bg-red-500' : 'bg-slate-300') }}"></span>
+                            <span id="device-door-status" class="font-semibold text-slate-900">{{ $doorOpen ? 'Terbuka' : ($device?->door_status === 'Closed' ? 'Tertutup' : 'N/A') }}</span>
+                        </span>
+                        <span id="device-last-seen-{{ $device->box_id }}">Last seen:{{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
                         </div>
                         <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
-                            <span>Battery Device: {{ $device->battery_device ?? '--' }}%</span>
-                            <span>Last seen: {{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
+                            <span id="device-battery-doorlock-{{ $device->box_id }}">Battery Doorlock:
+                                {{ $device->battery_doorlock ?? '--' }}%</span>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+                            <span id="device-battery-device-{{ $device->box_id }}">Battery Device:
+                                {{ $device->battery_device ?? '--' }}%</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500">
+                            <span id="device-location-{{ $device->box_id }}" class="font-mono">
+                                Location:
+                                @if ($lat !== null && $lng !== null)
+                                    {{ number_format($lat, 6) }}, {{ number_format($lng, 6) }}
+                                @else
+                                    GPS belum fix
+                                @endif
+                            </span>
                         </div>
                     </div>
                 @empty
@@ -159,7 +185,7 @@
                                                     @endphp
                                                     <span
                                                         class="rounded-full px-2 py-1 {{ $exists ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500' }}">
-                                                        {{ $label }}: {{ $exists ? 'Ada' : 'Belum' }}
+                                                        {{ $label }}
                                                     </span>
                                                 @endforeach
                                             </div>
@@ -171,10 +197,10 @@
                                                     @csrf
                                                     <select name="type"
                                                         class="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs font-semibold text-slate-700 focus:border-slate-300 focus:outline-none">
-                                                        <option value="pickup-open">Pickup Lock Open</option>
-                                                        <option value="pickup-closed">Pickup Lock Closed</option>
-                                                        <option value="delivery-open">Delivery Lock Open</option>
-                                                        <option value="delivery-closed">Delivery Lock Closed</option>
+                                                        <option value="pickup-open">Pickup to Outlet</option>
+                                                        <option value="pickup-closed">Delivery to Outlet</option>
+                                                        <option value="delivery-open">Delivery to Customer</option>
+                                                        <option value="delivery-closed">Order Completed</option>
                                                     </select>
                                                     <button
                                                         class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300">
@@ -190,7 +216,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-6 text-center text-sm text-slate-500">Belum ada
+                                        <td colspan="6" class="px-4 py-6 text-center text-sm text-slate-500">Belum Tersedia
                                             order.</td>
                                     </tr>
                                 @endforelse
@@ -259,6 +285,55 @@
 
         const markers = new Map();
 
+        function doorStatusLabel(doorStatus) {
+            if (doorStatus === 'Open') return 'Terbuka';
+            if (doorStatus === 'Closed') return 'Tertutup';
+            return 'N/A';
+        }
+
+        function updateDeviceCards(devices) {
+            devices.forEach(device => {
+                const boxId = device.box_id;
+                const statusEl = document.getElementById(`device-status-${boxId}`);
+                const doorDotEl = document.getElementById(`device-door-dot-${boxId}`);
+                const doorStatusEl = document.getElementById(`device-door-status-${boxId}`);
+                const doorlockEl = document.getElementById(`device-battery-doorlock-${boxId}`);
+                const deviceBatteryEl = document.getElementById(`device-battery-device-${boxId}`);
+                const locationEl = document.getElementById(`device-location-${boxId}`);
+                const lastSeenEl = document.getElementById(`device-last-seen-${boxId}`);
+
+                if (statusEl) {
+                    statusEl.textContent = device.status ?? 'N/A';
+                }
+
+                if (doorDotEl) {
+                    doorDotEl.className = `h-2.5 w-2.5 rounded-full ${device.door_status === 'Open' ? 'bg-emerald-500' : 'bg-red-500'}`;
+                }
+
+                if (doorStatusEl) {
+                    doorStatusEl.textContent = doorStatusLabel(device.door_status);
+                }
+
+                if (doorlockEl) {
+                    doorlockEl.textContent = `Battery Doorlock: ${device.battery_doorlock ?? '--'}%`;
+                }
+
+                if (deviceBatteryEl) {
+                    deviceBatteryEl.textContent = `Battery Device: ${device.battery_device ?? '--'}%`;
+                }
+
+                if (locationEl) {
+                    locationEl.textContent = (device.lat !== null && device.lng !== null) ?
+                        `Location: ${Number(device.lat).toFixed(6)}, ${Number(device.lng).toFixed(6)}` :
+                        'Location: GPS belum fix';
+                }
+
+                if (lastSeenEl) {
+                    lastSeenEl.textContent = `Last seen: ${device.last_seen ?? 'N/A'}`;
+                }
+            });
+        }
+
         function setViewFromDevices(devices, keepZoom = false) {
             const first = devices.find(device => device.lat && device.lng);
             if (first) {
@@ -274,7 +349,7 @@
                 if (!device.lat || !device.lng) {
                     return;
                 }
-                const label = `${device.box_id} • ${device.status} • Door ${device.battery_doorlock ?? '--'}% • Dev ${device.battery_device ?? '--'}%`;
+                const label = `${device.box_id} • ${device.status} • Door ${device.door_status ?? 'N/A'} • Batt ${device.battery_doorlock ?? '--'}%/${device.battery_device ?? '--'}%`;
                 if (markers.has(device.box_id)) {
                     markers.get(device.box_id).setLatLng([device.lat, device.lng]).bindPopup(label);
                 } else {
@@ -286,6 +361,7 @@
 
         setViewFromDevices(initialDevices);
         updateMarkers(initialDevices);
+        updateDeviceCards(initialDevices);
 
         async function refreshDevices() {
             try {
@@ -293,6 +369,7 @@
                 const data = await response.json();
                 if (!data.ok) return;
                 updateMarkers(data.devices);
+                updateDeviceCards(data.devices);
                 setViewFromDevices(data.devices, true);
             } catch (error) {
                 console.error(error);

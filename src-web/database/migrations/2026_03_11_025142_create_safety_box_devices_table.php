@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('safety_box_devices', function (Blueprint $table) {
             $table->string('box_id')->primary();
             $table->enum('status', ['Available', 'In Use'])->default('Available');
+            $table->enum('door_status', ['Open', 'Closed'])->nullable();
             $table->integer('battery_doorlock')->nullable();
             $table->integer('battery_device')->nullable();
             $table->string('gps_location')->nullable();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AccessLog;
 use App\Models\ServiceOrder;
+use Illuminate\Support\Carbon;
 
 class CustomerController extends Controller
 {
@@ -21,10 +22,16 @@ class CustomerController extends Controller
             ->first();
 
         $device = $lastLog?->device;
+        $deviceLastSeen = $device?->last_seen
+            ? Carbon::parse($device->last_seen)
+                ->timezone(config('app.timezone'))
+                ->translatedFormat('d M Y H:i') . ' WIB'
+            : 'N/A';
 
         return view('customer.show', [
             'order' => $order,
             'device' => $device,
+            'deviceLastSeen' => $deviceLastSeen,
         ]);
     }
 }

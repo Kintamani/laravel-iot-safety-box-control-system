@@ -8,20 +8,21 @@
 @section('content')
     @php
         $qrCards = [
-            'pickup-open' => ['title' => 'Pickup Open', 'hint' => 'Scan untuk membuka box saat penjemputan.'],
-            'pickup-closed' => ['title' => 'Pickup Closed', 'hint' => 'Scan setelah box ditutup untuk memulai In Transit.'],
-            'delivery-open' => ['title' => 'Delivery Open', 'hint' => 'Scan untuk membuka box saat pengembalian.'],
-            'delivery-closed' => ['title' => 'Delivery Closed', 'hint' => 'Scan setelah box ditutup untuk menyelesaikan order.'],
+            'pickup-open' => ['title' => 'QR Pickup to Outlet', 'hint' => 'Scan setelah box ditutup untuk memulai In Transit.'],
+            'pickup-closed' => ['title' => 'QR Delivery to Outlet', 'hint' => 'Scan setelah box ditutup untuk memulai In Transit.'],
+            'delivery-open' => ['title' => 'QR Delivery to Customer', 'hint' => 'Scan untuk membuka box saat pengembalian.'],
+            'delivery-closed' => ['title' => 'QR Order Completed', 'hint' => 'Scan setelah box ditutup untuk menyelesaikan order.'],
         ];
         $timeline = [
-            'pickup-open' => 'Buka box untuk pickup',
-            'pickup-closed' => 'Konfirmasi pickup selesai',
-            'delivery-open' => 'Buka box untuk delivery',
-            'delivery-closed' => 'Konfirmasi delivery selesai',
+            'pickup-open' => 'Pickup to Outlet',
+            'pickup-closed' => 'Delivery to Outlet',
+            'delivery-open' => 'Delivery to Customer',
+            'delivery-closed' => 'Order Completed',
         ];
         $coords = $device?->gps_location ? explode(',', $device->gps_location) : [null, null];
         $lat = isset($coords[0]) && is_numeric($coords[0]) ? (float) $coords[0] : null;
         $lng = isset($coords[1]) && is_numeric($coords[1]) ? (float) $coords[1] : null;
+        $doorOpen = $device?->door_status === 'Open';
         $qrStatus = [];
 
         foreach ($timeline as $qrType => $label) {
@@ -91,12 +92,21 @@
             <div id="customer-map" class="mt-4 h-72 w-full rounded-2xl border border-slate-200"></div>
             <div class="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
                 <p>Box: <span id="device-id" class="font-semibold text-slate-900">{{ $device?->box_id ?? 'N/A' }}</span></p>
+                <p class="inline-flex items-center gap-2">Door Status:
+                    <span id="device-door-dot"
+                        class="h-2.5 w-2.5 rounded-full {{ $doorOpen ? 'bg-emerald-500' : ($device?->door_status === 'Closed' ? 'bg-red-500' : 'bg-slate-300') }}"></span>
+                    <span id="device-door-status"
+                        class="font-semibold text-slate-900">{{ $doorOpen ? 'Terbuka' : ($device?->door_status === 'Closed' ? 'Tertutup' : 'N/A') }}</span>
+                </p>
                 <p>Battery Doorlock: <span id="device-battery-doorlock"
                         class="font-semibold text-slate-900">{{ $device?->battery_doorlock ?? '--' }}%</span></p>
                 <p>Battery Device: <span id="device-battery-device"
                         class="font-semibold text-slate-900">{{ $device?->battery_device ?? '--' }}%</span></p>
+                <p>Location: <span id="device-location"
+                        class="font-mono font-semibold text-slate-900">{{ $lat !== null && $lng !== null ? number_format($lat, 6) . ', ' . number_format($lng, 6) : 'GPS belum fix' }}</span>
+                </p>
                 <p>Last seen: <span id="device-lastseen"
-                        class="font-semibold text-slate-900">{{ $device?->last_seen?->diffForHumans() ?? 'N/A' }}</span></p>
+                        class="font-semibold text-slate-900">{{ $deviceLastSeen ?? 'N/A' }}</span></p>
             </div>
         </section>
     </div>
@@ -113,6 +123,12 @@
         }).addTo(map);
 
         let marker = null;
+
+        function doorStatusLabel(doorStatus) {
+            if (doorStatus === 'Open') return 'Terbuka';
+            if (doorStatus === 'Closed') return 'Tertutup';
+            return 'N/A';
+        }
 
         function setMarker(lat, lng) {
             if (!lat || !lng) {
@@ -177,8 +193,15 @@
 
                 if (data.device) {
                     document.getElementById('device-id').textContent = data.device.box_id;
+                    document.getElementById('device-door-status').textContent = doorStatusLabel(data.device.door_status);
+                    document.getElementById('device-door-dot').className =
+                        `h-2.5 w-2.5 rounded-full ${data.device.door_status === 'Open' ? 'bg-emerald-500' : data.device.door_status === 'Closed' ? 'bg-red-500' : 'bg-slate-300'}`;
                     document.getElementById('device-battery-doorlock').textContent = `${data.device.battery_doorlock ?? '--'}%`;
                     document.getElementById('device-battery-device').textContent = `${data.device.battery_device ?? '--'}%`;
+                    document.getElementById('device-location').textContent =
+                        (data.device.lat !== null && data.device.lng !== null) ?
+                        `${Number(data.device.lat).toFixed(6)}, ${Number(data.device.lng).toFixed(6)}` :
+                        'GPS belum fix';
                     document.getElementById('device-lastseen').textContent = data.device.last_seen ?? 'N/A';
                     setMarker(data.device.lat, data.device.lng);
                 } else {

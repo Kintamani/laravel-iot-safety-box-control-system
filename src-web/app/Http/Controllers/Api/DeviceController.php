@@ -27,6 +27,7 @@ class DeviceController extends Controller
             'lat' => ['nullable', 'numeric'],
             'lng' => ['nullable', 'numeric'],
             'status' => ['nullable', 'in:Available,In Use'],
+            'door_status' => ['nullable', 'in:Open,Closed'],
         ]);
 
         $device = SafetyBoxDevice::updateOrCreate(
@@ -36,6 +37,7 @@ class DeviceController extends Controller
                 'battery_device' => $data['battery_device'] ?? null,
                 'gps_location' => $this->formatLocation($data['lat'] ?? null, $data['lng'] ?? null),
                 'status' => $data['status'] ?? 'Available',
+                'door_status' => $data['door_status'] ?? null,
                 'last_seen' => now(),
             ]
         );
@@ -43,7 +45,7 @@ class DeviceController extends Controller
         return response()->json([
             'ok' => true,
             'box_id' => $device->box_id,
-            'server_time' => now()->toIso8601String(),
+            'server_time' => $this->isoTimestamp(now()),
         ]);
     }
 
@@ -115,38 +117,6 @@ class DeviceController extends Controller
     }
 
     /**
-     * Record a lock event from a device.
-     */
-    public function lock(Request $request): JsonResponse
-    {
-        $this->assertDeviceKey($request);
-
-        $data = $request->validate([
-            'box_id' => ['required', 'string', 'max:255'],
-            'qr_code' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $qr = null;
-        if (!empty($data['qr_code'])) {
-            $qr = QRCode::where('qr_code', $data['qr_code'])->first();
-        }
-
-        AccessLog::create([
-            'box_id' => $data['box_id'],
-            'scanned_qr_id' => $qr?->qr_id,
-            'log_type' => 'Lock',
-            'timestamp' => Carbon::now(),
-        ]);
-
-        SafetyBoxDevice::where('box_id', $data['box_id'])->update([
-            'status' => 'Available',
-            'last_seen' => now(),
-        ]);
-
-        return response()->json(['ok' => true]);
-    }
-
-    /**
      * List all devices with their latest status and location.
      */
     public function devices(): JsonResponse
@@ -157,9 +127,10 @@ class DeviceController extends Controller
             return [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
+                'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
-                'last_seen' => optional($device->last_seen)->toIso8601String(),
+                'last_seen' => $this->formatLastSeen($device->last_seen),
                 'lat' => $lat,
                 'lng' => $lng,
             ];
@@ -203,9 +174,10 @@ class DeviceController extends Controller
             'device' => $device ? [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
+                'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
-                'last_seen' => optional($device->last_seen)->toIso8601String(),
+                'last_seen' => $this->formatLastSeen($device->last_seen),
                 'lat' => $lat,
                 'lng' => $lng,
             ] : null,
@@ -279,22 +251,6 @@ class DeviceController extends Controller
 
         if ($this->isClosedQr($type)) {
             return 'complete';
-        }
-
-        return null;
-    }
-
-    /**
-     * Normalize the QR enum into its business stage.
-     */
-    private function qrStage(string $type): ?string
-    {
-        if (str_starts_with($type, 'pickup-')) {
-            return 'Pickup';
-        }
-
-        if (str_starts_with($type, 'delivery-')) {
-            return 'Delivery';
         }
 
         return null;
