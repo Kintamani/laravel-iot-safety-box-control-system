@@ -6,11 +6,11 @@
 #include <WiFi.h>
 
 // ================== DEVICE CONFIG ==================
-const char *WIFI_SSID = "POCO X6 Pro 5G";
-const char *WIFI_PASS = "12tigabelas14selanjutnya";
+const char *WIFI_SSID = "Your SSID";
+const char *WIFI_PASS = "Your WIFI Password";
 
-const char *CMS_BASE_URL = "https://caiman-communal-eagle.ngrok-free.app";
-const char *DEVICE_API_KEY = "rahasia";
+const char *CMS_BASE_URL = "http://your-cms-url.com";
+const char *DEVICE_API_KEY = "Your Device API Key";
 
 const char *BOX_ID = "BOX-01";
 
