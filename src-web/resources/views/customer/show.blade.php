@@ -8,13 +8,13 @@
 @section('content')
     @php
         $qrCards = [
-            'pickup-open' => ['title' => 'QR Pickup to Outlet', 'hint' => 'Scan setelah box ditutup untuk memulai In Transit.'],
+            'pickup-open' => ['title' => 'QR Pickup to Customer', 'hint' => 'Scan setelah box ditutup untuk memulai In Transit.'],
             'pickup-closed' => ['title' => 'QR Delivery to Outlet', 'hint' => 'Scan setelah box ditutup untuk memulai In Transit.'],
             'delivery-open' => ['title' => 'QR Delivery to Customer', 'hint' => 'Scan untuk membuka box saat pengembalian.'],
             'delivery-closed' => ['title' => 'QR Order Completed', 'hint' => 'Scan setelah box ditutup untuk menyelesaikan order.'],
         ];
         $timeline = [
-            'pickup-open' => 'Pickup to Outlet',
+            'pickup-open' => 'Pickup to Customer',
             'pickup-closed' => 'Delivery to Outlet',
             'delivery-open' => 'Delivery to Customer',
             'delivery-closed' => 'Order Completed',

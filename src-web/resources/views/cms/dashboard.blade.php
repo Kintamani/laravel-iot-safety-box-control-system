@@ -21,7 +21,7 @@
             ];
         });
         $qrTypeLabels = [
-            'pickup-open' => 'Pickup to Outlet',
+            'pickup-open' => 'Pickup to Customer',
             'pickup-closed' => 'Delivery to Outlet',
             'delivery-open' => 'Delivery to Customer',
             'delivery-closed' => 'Order Completed',
@@ -197,7 +197,7 @@
                                                     @csrf
                                                     <select name="type"
                                                         class="rounded-full border border-slate-200 bg-white px-4 py-1 text-xs font-semibold text-slate-700 focus:border-slate-300 focus:outline-none">
-                                                        <option value="pickup-open">Pickup to Outlet</option>
+                                                        <option value="pickup-open">Pickup to Customer</option>
                                                         <option value="pickup-closed">Delivery to Outlet</option>
                                                         <option value="delivery-open">Delivery to Customer</option>
                                                         <option value="delivery-closed">Order Completed</option>
