@@ -370,4 +370,12 @@ class DeviceController extends Controller
             abort(401, 'Invalid device key.');
         }
     }
+
+    /**
+     * Format timestamp as ISO-8601.
+     */
+    private function isoTimestamp($timestamp): string
+    {
+        return $timestamp->toIso8601String();
+    }
 }
