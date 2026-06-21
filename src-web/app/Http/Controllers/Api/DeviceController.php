@@ -130,7 +130,7 @@ class DeviceController extends Controller
                 'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
-                'last_seen' => $this->formatLastSeen($device->last_seen),
+                'last_seen' => $device->last_seen?->format('Y-m-d H:i:s'),
                 'lat' => $lat,
                 'lng' => $lng,
             ];
@@ -177,7 +177,7 @@ class DeviceController extends Controller
                 'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
-                'last_seen' => $this->formatLastSeen($device->last_seen),
+                'last_seen' => $device->last_seen?->format('Y-m-d H:i:s'),
                 'lat' => $lat,
                 'lng' => $lng,
             ] : null,
