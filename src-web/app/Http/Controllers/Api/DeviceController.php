@@ -130,7 +130,7 @@ class DeviceController extends Controller
                 'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
-                'last_seen' => $device->last_seen?->format('Y-m-d H:i:s'),
+                'last_seen' => $this->formatLastSeen($device->last_seen) ?? '-',
                 'lat' => $lat,
                 'lng' => $lng,
             ];
@@ -177,7 +177,7 @@ class DeviceController extends Controller
                 'door_status' => $device->door_status,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
-                'last_seen' => $device->last_seen?->format('Y-m-d H:i:s'),
+                'last_seen' => $this->formatLastSeen($device->last_seen) ?? '-',
                 'lat' => $lat,
                 'lng' => $lng,
             ] : null,
@@ -377,5 +377,14 @@ class DeviceController extends Controller
     private function isoTimestamp($timestamp): string
     {
         return $timestamp->toIso8601String();
+    }
+
+    private function formatLastSeen($timestamp): ?string
+    {
+        if (!$timestamp) {
+            return null;
+        }
+
+        return $timestamp->locale('id')->diffForHumans();
     }
 }
