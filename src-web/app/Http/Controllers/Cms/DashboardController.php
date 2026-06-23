@@ -23,17 +23,22 @@ class DashboardController extends Controller
         $devices = SafetyBoxDevice::orderBy('box_id')->get();
 
         $search = trim((string) $request->input('search', ''));
+        $orderSearch = ltrim($search, '#');
         $filterDate = (string) $request->input('filter_date', '');
 
         $logs = AccessLog::with(['device', 'qrCode.order'])
-            ->when($search !== '', function (Builder $query) use ($search) {
-                $query->where(function (Builder $query) use ($search) {
+            ->when($search !== '', function (Builder $query) use ($search, $orderSearch) {
+                $query->where(function (Builder $query) use ($search, $orderSearch) {
                     $query->orWhere('box_id', 'like', "%{$search}%")
                         ->orWhere('log_type', 'like', "%{$search}%")
                         ->orWhereRaw("strftime('%Y-%m-%d', timestamp) like ?", ["%{$search}%"])
                         ->orWhereRaw("strftime('%d %m %Y %H:%M', timestamp) like ?", ["%{$search}%"])
-                        ->orWhereHas('qrCode', function (Builder $qrQuery) use ($search) {
+                        ->orWhereHas('qrCode', function (Builder $qrQuery) use ($search, $orderSearch) {
                             $qrQuery->where('order_id', 'like', "%{$search}%");
+
+                            if ($orderSearch !== $search && $orderSearch !== '') {
+                                $qrQuery->orWhere('order_id', 'like', "%{$orderSearch}%");
+                            }
                         });
                 });
             })
@@ -43,6 +48,24 @@ class DashboardController extends Controller
             ->orderByDesc('timestamp')
             ->paginate(10)
             ->withQueryString();
+
+        if ($request->ajax()) {
+            return response()->json([
+                'html' => view('cms.partials.access-log-section', [
+                    'logs' => $logs,
+                    'logFilters' => [
+                        'search' => $search,
+                        'filter_date' => $filterDate,
+                    ],
+                    'qrTypeLabels' => [
+                        'pickup-open' => 'Pickup to Customer',
+                        'pickup-closed' => 'Delivery to Outlet',
+                        'delivery-open' => 'Delivery to Customer',
+                        'delivery-closed' => 'Order Completed',
+                    ],
+                ])->render(),
+            ]);
+        }
 
         return view('cms.dashboard', [
             'orders' => $orders,
