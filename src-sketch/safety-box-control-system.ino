@@ -97,14 +97,16 @@ HardwareSerial barcodeSerial(1);
 HardwareSerial gpsSerial(2);
 TinyGPSPlus gps;
 
-enum DeviceState {
+enum DeviceState
+{
   STATE_WAIT_QR,
   STATE_VALIDATE_QR,
   STATE_UNLOCKED,
   STATE_WAIT_CLOSE_QR,
 };
 
-struct ScanResponse {
+struct ScanResponse
+{
   bool httpOk = false;
   bool valid = false;
   String message;
@@ -135,22 +137,27 @@ bool doorOpenedSinceUnlock = false;
 bool relayIsUnlocked = false;
 bool manualRelayActive = false;
 
-String buildApiUrl(const char *path) {
+String buildApiUrl(const char *path)
+{
   String url = CMS_BASE_URL;
-  if (url.endsWith("/")) {
+  if (url.endsWith("/"))
+  {
     url.remove(url.length() - 1);
   }
 
   return url + String(path);
 }
 
-String escapeJson(const String &value) {
+String escapeJson(const String &value)
+{
   String escaped;
   escaped.reserve(value.length() + 8);
 
-  for (size_t i = 0; i < value.length(); ++i) {
+  for (size_t i = 0; i < value.length(); ++i)
+  {
     const char c = value.charAt(i);
-    if (c == '\\' || c == '"') {
+    if (c == '\\' || c == '"')
+    {
       escaped += '\\';
     }
     escaped += c;
@@ -159,17 +166,20 @@ String escapeJson(const String &value) {
   return escaped;
 }
 
-void setRelay(bool unlocked) {
+void setRelay(bool unlocked)
+{
   relayIsUnlocked = unlocked;
   const bool activeLevel = RELAY_ACTIVE_HIGH ? unlocked : !unlocked;
   digitalWrite(RELAY_PIN, activeLevel ? HIGH : LOW);
 }
 
-float readBatteryVoltage(int pin) {
+float readBatteryVoltage(int pin)
+{
   uint32_t totalMilliVolts = 0;
   constexpr int SAMPLES = 50;
 
-  for (int i = 0; i < SAMPLES; i++) {
+  for (int i = 0; i < SAMPLES; i++)
+  {
     totalMilliVolts += analogReadMilliVolts(pin);
     delayMicroseconds(500);
   }
@@ -192,18 +202,22 @@ float readBatteryVoltage(int pin) {
                              ? doorlockOutOfRangeCount
                              : deviceOutOfRangeCount;
 
-  if (outOfRange) {
+  if (outOfRange)
+  {
     outOfRangeCount++;
 
     // FIX: satu / beberapa sample noise saja belum tentu berarti kabel
     // dicabut. Selama belum mencapai OUT_OF_RANGE_CONFIRM_COUNT kali
     // berturut-turut, anggap ini noise sesaat dan kembalikan nilai
     // smoothed terakhir yang masih valid (bukan langsung 0V / reset).
-    if (outOfRangeCount < OUT_OF_RANGE_CONFIRM_COUNT) {
-      if (pin == VOLTAGE_SENSOR_DOORLOCK_PIN && smoothedVoltageDoorlock >= 0) {
+    if (outOfRangeCount < OUT_OF_RANGE_CONFIRM_COUNT)
+    {
+      if (pin == VOLTAGE_SENSOR_DOORLOCK_PIN && smoothedVoltageDoorlock >= 0)
+      {
         return smoothedVoltageDoorlock;
       }
-      if (pin == VOLTAGE_SENSOR_DEVICE_PIN && smoothedVoltageDevice >= 0) {
+      if (pin == VOLTAGE_SENSOR_DEVICE_PIN && smoothedVoltageDevice >= 0)
+      {
         return smoothedVoltageDevice;
       }
       return 0.0f;
@@ -212,9 +226,12 @@ float readBatteryVoltage(int pin) {
     // Sudah konsisten out-of-range beberapa kali berturut-turut -> baru
     // dianggap benar-benar disconnect. RESET memori filter ke -1.0f agar
     // saat dicolok lagi bisa langsung normal.
-    if (pin == VOLTAGE_SENSOR_DOORLOCK_PIN) {
+    if (pin == VOLTAGE_SENSOR_DOORLOCK_PIN)
+    {
       smoothedVoltageDoorlock = -1.0f;
-    } else if (pin == VOLTAGE_SENSOR_DEVICE_PIN) {
+    }
+    else if (pin == VOLTAGE_SENSOR_DEVICE_PIN)
+    {
       smoothedVoltageDevice = -1.0f;
     }
 
@@ -228,37 +245,48 @@ float readBatteryVoltage(int pin) {
   // ==========================================
   // LOGIKA FILTER EMA (SMOOTHING) DENGAN ADAPTIVE ALPHA
   // ==========================================
-  if (pin == VOLTAGE_SENSOR_DOORLOCK_PIN) {
+  if (pin == VOLTAGE_SENSOR_DOORLOCK_PIN)
+  {
     // Jika memori reset (-1.0), langsung pakai nilai asli tanpa delay
-    if (smoothedVoltageDoorlock < 0) {
+    if (smoothedVoltageDoorlock < 0)
+    {
       smoothedVoltageDoorlock = currentRawVoltage;
       doorlockValidCount = 1;
-    } else {
+    }
+    else
+    {
       // Adaptive alpha: 10 sampel pertama pakai alpha 0.2 (20%) agar cepat mendekati nilai asli
       // Setelah itu pakai FILTER_ALPHA (1%) agar sangat stabil
       float currentAlpha = (doorlockValidCount < 10) ? 0.2f : FILTER_ALPHA;
-      
+
       // Jika memori ada, perhalus pergerakannya
       smoothedVoltageDoorlock =
           (currentAlpha * currentRawVoltage) +
           ((1.0f - currentAlpha) * smoothedVoltageDoorlock);
-          
-      if (doorlockValidCount < 10) {
+
+      if (doorlockValidCount < 10)
+      {
         doorlockValidCount++;
       }
     }
     return smoothedVoltageDoorlock;
-  } else if (pin == VOLTAGE_SENSOR_DEVICE_PIN) {
-    if (smoothedVoltageDevice < 0) {
+  }
+  else if (pin == VOLTAGE_SENSOR_DEVICE_PIN)
+  {
+    if (smoothedVoltageDevice < 0)
+    {
       smoothedVoltageDevice = currentRawVoltage;
       deviceValidCount = 1;
-    } else {
+    }
+    else
+    {
       float currentAlpha = (deviceValidCount < 10) ? 0.2f : FILTER_ALPHA;
-      
+
       smoothedVoltageDevice = (currentAlpha * currentRawVoltage) +
                               ((1.0f - currentAlpha) * smoothedVoltageDevice);
-                              
-      if (deviceValidCount < 10) {
+
+      if (deviceValidCount < 10)
+      {
         deviceValidCount++;
       }
     }
@@ -269,12 +297,15 @@ float readBatteryVoltage(int pin) {
 }
 
 uint8_t batteryPercentFromVoltage(float voltage, float emptyVoltage,
-                                  float fullVoltage) {
-  if (voltage <= emptyVoltage) {
+                                  float fullVoltage)
+{
+  if (voltage <= emptyVoltage)
+  {
     return 0;
   }
 
-  if (voltage >= fullVoltage) {
+  if (voltage >= fullVoltage)
+  {
     return 100;
   }
 
@@ -282,13 +313,15 @@ uint8_t batteryPercentFromVoltage(float voltage, float emptyVoltage,
                               (fullVoltage - emptyVoltage));
 }
 
-uint8_t readDoorlockBatteryPercent() {
+uint8_t readDoorlockBatteryPercent()
+{
   return batteryPercentFromVoltage(
       readBatteryVoltage(VOLTAGE_SENSOR_DOORLOCK_PIN),
       BATTERY_DOORLOCK_EMPTY_VOLTAGE, BATTERY_DOORLOCK_FULL_VOLTAGE);
 }
 
-uint8_t readDeviceBatteryPercent() {
+uint8_t readDeviceBatteryPercent()
+{
   return batteryPercentFromVoltage(
       readBatteryVoltage(VOLTAGE_SENSOR_DEVICE_PIN),
       BATTERY_DEVICE_EMPTY_VOLTAGE, BATTERY_DEVICE_FULL_VOLTAGE);
@@ -302,8 +335,10 @@ const char *doorStatusLabel() { return isDoorClosed() ? "Closed" : "Open"; }
 
 const char *relayStatusLabel() { return relayIsUnlocked ? "On" : "Off"; }
 
-void startManualRelay(unsigned long durationMs) {
-  if (durationMs == 0) {
+void startManualRelay(unsigned long durationMs)
+{
+  if (durationMs == 0)
+  {
     durationMs = MANUAL_RELAY_DURATION_MS;
   }
 
@@ -316,45 +351,56 @@ void startManualRelay(unsigned long durationMs) {
   Serial.println(" ms");
 }
 
-void serviceManualRelay() {
-  if (!manualRelayActive) {
+void serviceManualRelay()
+{
+  if (!manualRelayActive)
+  {
     return;
   }
 
-  if ((long)(millis() - manualRelayOffAt) < 0) {
+  if ((long)(millis() - manualRelayOffAt) < 0)
+  {
     return;
   }
 
   manualRelayActive = false;
-  if (currentState != STATE_UNLOCKED) {
+  if (currentState != STATE_UNLOCKED)
+  {
     setRelay(false);
   }
 
   Serial.println("[RELAY] Manual OFF");
 }
 
-void updateGps() {
-  while (gpsSerial.available() > 0) {
+void updateGps()
+{
+  while (gpsSerial.available() > 0)
+  {
     gps.encode(gpsSerial.read());
   }
 
-  if (gps.location.isValid()) {
+  if (gps.location.isValid())
+  {
     currentLat = gps.location.lat();
     currentLng = gps.location.lng();
     gpsHasFix = true;
   }
 }
 
-void serviceBackground(unsigned long durationMs) {
+void serviceBackground(unsigned long durationMs)
+{
   const unsigned long startedAt = millis();
-  while (millis() - startedAt < durationMs) {
+  while (millis() - startedAt < durationMs)
+  {
     updateGps();
     delay(10);
   }
 }
 
-void logGpsToSerial() {
-  if (millis() - lastGpsLogAt < GPS_SERIAL_LOG_INTERVAL_MS) {
+void logGpsToSerial()
+{
+  if (millis() - lastGpsLogAt < GPS_SERIAL_LOG_INTERVAL_MS)
+  {
     return;
   }
 
@@ -367,7 +413,8 @@ void logGpsToSerial() {
   Serial.print(" | chars: ");
   Serial.print(gps.charsProcessed());
 
-  if (gps.location.isValid()) {
+  if (gps.location.isValid())
+  {
     Serial.print(" | lat: ");
     Serial.print(gps.location.lat(), 6);
     Serial.print(" | lng: ");
@@ -378,8 +425,10 @@ void logGpsToSerial() {
   Serial.println(" | lat/lng: waiting");
 }
 
-bool ensureWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
+bool ensureWiFi()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
     return true;
   }
 
@@ -388,11 +437,13 @@ bool ensureWiFi() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   int retry = 0;
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     serviceBackground(WIFI_RETRY_DELAY_MS);
     Serial.print(".");
     retry++;
-    if (retry > 20) {
+    if (retry > 20)
+    {
       Serial.println("\nFailed to connect!");
       return false;
     }
@@ -409,33 +460,39 @@ bool ensureWiFi() {
   return true;
 }
 
-int postJson(const char *path, const String &payload, String &response) {
+int postJson(const char *path, const String &payload, String &response)
+{
   response = "";
 
-  if (!ensureWiFi()) {
+  if (!ensureWiFi())
+  {
     return -1;
   }
 
   const String url = buildApiUrl(path);
-  if (wifiConnectedAt > 0 && millis() - wifiConnectedAt < WIFI_STABILIZE_MS) {
+  if (wifiConnectedAt > 0 && millis() - wifiConnectedAt < WIFI_STABILIZE_MS)
+  {
     serviceBackground(WIFI_STABILIZE_MS - (millis() - wifiConnectedAt));
   }
 
   int lastCode = -1;
   String lastResponse;
 
-  for (int attempt = 1; attempt <= 3; attempt++) {
+  for (int attempt = 1; attempt <= 3; attempt++)
+  {
     Serial.println("[HTTP] POST " + url);
     Serial.print("[HTTP] Attempt: ");
     Serial.println(attempt);
     const bool isHttps = url.startsWith("https://");
 
-    if (isHttps) {
+    if (isHttps)
+    {
       WiFiClientSecure client;
       client.setInsecure();
 
       HTTPClient http;
-      if (!http.begin(client, url)) {
+      if (!http.begin(client, url))
+      {
         Serial.println("[HTTP] http.begin failed");
         lastCode = -2;
         serviceBackground(HTTP_RETRY_DELAY_MS);
@@ -444,7 +501,8 @@ int postJson(const char *path, const String &payload, String &response) {
 
       http.addHeader("Content-Type", "application/json");
       http.addHeader("ngrok-skip-browser-warning", "true");
-      if (strlen(DEVICE_API_KEY) > 0) {
+      if (strlen(DEVICE_API_KEY) > 0)
+      {
         http.addHeader("X-Device-Key", DEVICE_API_KEY);
       }
 
@@ -460,7 +518,8 @@ int postJson(const char *path, const String &payload, String &response) {
       Serial.println("[HTTP] Response:");
       Serial.println(lastResponse);
 
-      if (lastCode <= 0) {
+      if (lastCode <= 0)
+      {
         Serial.print("[HTTP] Error: ");
         Serial.println(http.errorToString(lastCode));
         http.end();
@@ -471,10 +530,13 @@ int postJson(const char *path, const String &payload, String &response) {
       http.end();
       response = lastResponse;
       return lastCode;
-    } else {
+    }
+    else
+    {
       WiFiClient client;
       HTTPClient http;
-      if (!http.begin(client, url)) {
+      if (!http.begin(client, url))
+      {
         Serial.println("[HTTP] http.begin failed");
         lastCode = -2;
         serviceBackground(HTTP_RETRY_DELAY_MS);
@@ -483,7 +545,8 @@ int postJson(const char *path, const String &payload, String &response) {
 
       http.addHeader("Content-Type", "application/json");
       http.addHeader("ngrok-skip-browser-warning", "true");
-      if (strlen(DEVICE_API_KEY) > 0) {
+      if (strlen(DEVICE_API_KEY) > 0)
+      {
         http.addHeader("X-Device-Key", DEVICE_API_KEY);
       }
 
@@ -499,7 +562,8 @@ int postJson(const char *path, const String &payload, String &response) {
       Serial.println("[HTTP] Response:");
       Serial.println(lastResponse);
 
-      if (lastCode <= 0) {
+      if (lastCode <= 0)
+      {
         Serial.print("[HTTP] Error: ");
         Serial.println(http.errorToString(lastCode));
         http.end();
@@ -517,10 +581,12 @@ int postJson(const char *path, const String &payload, String &response) {
   return lastCode;
 }
 
-String extractJsonValue(const String &json, const char *key) {
+String extractJsonValue(const String &json, const char *key)
+{
   const String needle = String("\"") + key + "\":";
   const int keyPos = json.indexOf(needle);
-  if (keyPos < 0) {
+  if (keyPos < 0)
+  {
     return "";
   }
 
@@ -529,29 +595,37 @@ String extractJsonValue(const String &json, const char *key) {
   int valuePos = keyPos + needle.length();
 
   while (valuePos < json.length() &&
-         (json.charAt(valuePos) == ' ' || json.charAt(valuePos) == '"')) {
+         (json.charAt(valuePos) == ' ' || json.charAt(valuePos) == '"'))
+  {
     valuePos++;
   }
 
   int endPos = valuePos;
-  if (quoted) {
+  if (quoted)
+  {
     endPos = json.indexOf('"', valuePos);
-  } else {
+  }
+  else
+  {
     while (endPos < json.length() && json.charAt(endPos) != ',' &&
-           json.charAt(endPos) != '}') {
+           json.charAt(endPos) != '}')
+    {
       endPos++;
     }
   }
 
-  if (endPos < 0 || endPos <= valuePos) {
+  if (endPos < 0 || endPos <= valuePos)
+  {
     return "";
   }
 
   return json.substring(valuePos, endPos);
 }
 
-void drawCenteredText(const String &text, int y, uint8_t size, uint16_t color) {
-  if (!displayReady) {
+void drawCenteredText(const String &text, int y, uint8_t size, uint16_t color)
+{
+  if (!displayReady)
+  {
     return;
   }
 
@@ -562,8 +636,10 @@ void drawCenteredText(const String &text, int y, uint8_t size, uint16_t color) {
 }
 
 void drawScreen(const String &title, const String &line1, const String &line2,
-                const String &line3, uint16_t accentColor) {
-  if (!displayReady) {
+                const String &line3, uint16_t accentColor)
+{
+  if (!displayReady)
+  {
     return;
   }
 
@@ -577,7 +653,8 @@ void drawScreen(const String &title, const String &line1, const String &line2,
   drawCenteredText(line3, 160, 1, TFT_WHITE);
 }
 
-void resetDisplayCache() {
+void resetDisplayCache()
+{
   lastDisplayTitle = "";
   lastDisplayLine1 = "";
   lastDisplayLine2 = "";
@@ -590,16 +667,19 @@ void resetDisplayCache() {
 void drawScreenIfChanged(const String &title, const String &line1,
                          const String &line2, const String &line3,
                          uint16_t accentColor, const String &footer = "",
-                         uint16_t footerColor = TFT_WHITE) {
+                         uint16_t footerColor = TFT_WHITE)
+{
   if (lastDisplayTitle == title && lastDisplayLine1 == line1 &&
       lastDisplayLine2 == line2 && lastDisplayLine3 == line3 &&
       lastDisplayFooter == footer && lastDisplayAccentColor == accentColor &&
-      lastDisplayFooterColor == footerColor) {
+      lastDisplayFooterColor == footerColor)
+  {
     return;
   }
 
   drawScreen(title, line1, line2, line3, accentColor);
-  if (footer.length() > 0) {
+  if (footer.length() > 0)
+  {
     drawCenteredText(footer, 192, 1, footerColor);
   }
 
@@ -612,7 +692,8 @@ void drawScreenIfChanged(const String &title, const String &line1,
   lastDisplayFooterColor = footerColor;
 }
 
-void refreshIdleScreen() {
+void refreshIdleScreen()
+{
   const String wifiState =
       WiFi.status() == WL_CONNECTED ? "WiFi OK" : "WiFi OFF";
   const String gpsState =
@@ -627,14 +708,16 @@ void refreshIdleScreen() {
                       doorState, TFT_GREEN);
 }
 
-void refreshUnlockedScreen() {
+void refreshUnlockedScreen()
+{
   const String stage = activeQrType.length() > 0 ? activeQrType : activeQrCode;
   const String doorState =
       isDoorClosed() ? "Door masih tertutup" : "Door terbuka";
   drawScreenIfChanged("UNLOCK", "Akses diberikan", stage, doorState, TFT_GREEN);
 }
 
-void refreshWaitCloseQrScreen() {
+void refreshWaitCloseQrScreen()
+{
   const String qrPrompt =
       expectedCloseQrType.length() > 0 ? expectedCloseQrType : "Scan QR closed";
   const String doorState =
@@ -643,7 +726,8 @@ void refreshWaitCloseQrScreen() {
                       TFT_YELLOW);
 }
 
-String buildHeartbeatPayload(const char *status) {
+String buildHeartbeatPayload(const char *status)
+{
   String payload = "{";
   payload += "\"box_id\":\"" + escapeJson(String(BOX_ID)) + "\",";
   payload +=
@@ -653,7 +737,8 @@ String buildHeartbeatPayload(const char *status) {
   payload += "\"door_status\":\"" + String(doorStatusLabel()) + "\",";
   payload += "\"relay_status\":\"" + String(relayStatusLabel()) + "\"";
 
-  if (gpsHasFix) {
+  if (gpsHasFix)
+  {
     payload += ",\"lat\":" + String(currentLat, 6);
     payload += ",\"lng\":" + String(currentLng, 6);
   }
@@ -662,19 +747,23 @@ String buildHeartbeatPayload(const char *status) {
   return payload;
 }
 
-bool sendHeartbeat(const char *status) {
+bool sendHeartbeat(const char *status)
+{
   String response;
   const int code = postJson("/api/device/heartbeat",
                             buildHeartbeatPayload(status), response);
-  if (code <= 0) {
+  if (code <= 0)
+  {
     return false;
   }
 
   const String relayAction = extractJsonValue(response, "action");
-  if (relayAction == "turn_on_relay") {
+  if (relayAction == "turn_on_relay")
+  {
     unsigned long durationMs =
         extractJsonValue(response, "duration_ms").toInt();
-    if (durationMs == 0) {
+    if (durationMs == 0)
+    {
       durationMs = MANUAL_RELAY_DURATION_MS;
     }
 
@@ -684,14 +773,16 @@ bool sendHeartbeat(const char *status) {
   return true;
 }
 
-ScanResponse sendScanRequest(const String &qrCode) {
+ScanResponse sendScanRequest(const String &qrCode)
+{
   ScanResponse result;
 
   String payload = "{";
   payload += "\"box_id\":\"" + escapeJson(String(BOX_ID)) + "\",";
   payload += "\"qr_code\":\"" + escapeJson(qrCode) + "\"";
 
-  if (gpsHasFix) {
+  if (gpsHasFix)
+  {
     payload += ",\"lat\":" + String(currentLat, 6);
     payload += ",\"lng\":" + String(currentLng, 6);
   }
@@ -702,7 +793,8 @@ ScanResponse sendScanRequest(const String &qrCode) {
   const int code = postJson("/api/device/scan", payload, response);
 
   result.httpOk = code > 0;
-  if (!result.httpOk) {
+  if (!result.httpOk)
+  {
     result.message = "HTTP gagal";
     return result;
   }
@@ -713,23 +805,28 @@ ScanResponse sendScanRequest(const String &qrCode) {
   result.action = extractJsonValue(response, "action");
   result.nextQrType = extractJsonValue(response, "next_qr_type");
 
-  if (!result.valid && result.message.length() == 0) {
+  if (!result.valid && result.message.length() == 0)
+  {
     result.message = "QR ditolak";
   }
 
   return result;
 }
 
-const char *heartbeatStatusForState() {
-  if (currentState == STATE_UNLOCKED || currentState == STATE_WAIT_CLOSE_QR) {
+const char *heartbeatStatusForState()
+{
+  if (currentState == STATE_UNLOCKED || currentState == STATE_WAIT_CLOSE_QR)
+  {
     return "In Use";
   }
 
   return "Available";
 }
 
-void maybeSendHeartbeat() {
-  if (millis() - lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) {
+void maybeSendHeartbeat()
+{
+  if (millis() - lastHeartbeatAt < HEARTBEAT_INTERVAL_MS)
+  {
     return;
   }
 
@@ -737,12 +834,14 @@ void maybeSendHeartbeat() {
   sendHeartbeat(heartbeatStatusForState());
 }
 
-void beginScanValidation(const String &qrValue) {
+void beginScanValidation(const String &qrValue)
+{
   activeQrCode = qrValue;
   currentState = STATE_VALIDATE_QR;
 }
 
-void resetWorkflow() {
+void resetWorkflow()
+{
   activeQrCode = "";
   activeQrType = "";
   expectedCloseQrType = "";
@@ -750,21 +849,27 @@ void resetWorkflow() {
   currentState = STATE_WAIT_QR;
 }
 
-void readBarcode() {
-  if (currentState != STATE_WAIT_QR && currentState != STATE_WAIT_CLOSE_QR) {
-    while (barcodeSerial.available()) {
+void readBarcode()
+{
+  if (currentState != STATE_WAIT_QR && currentState != STATE_WAIT_CLOSE_QR)
+  {
+    while (barcodeSerial.available())
+    {
       barcodeSerial.read();
     }
     return;
   }
 
-  while (barcodeSerial.available()) {
+  while (barcodeSerial.available())
+  {
     const char c = static_cast<char>(barcodeSerial.read());
     lastQrCharAt = millis();
 
-    if (c == '\r' || c == '\n') {
+    if (c == '\r' || c == '\n')
+    {
       barcodeBuffer.trim();
-      if (barcodeBuffer.length() > 0) {
+      if (barcodeBuffer.length() > 0)
+      {
         beginScanValidation(barcodeBuffer);
         barcodeBuffer = "";
         return;
@@ -776,16 +881,19 @@ void readBarcode() {
   }
 
   if (barcodeBuffer.length() > 0 &&
-      millis() - lastQrCharAt > QR_CHAR_TIMEOUT_MS) {
+      millis() - lastQrCharAt > QR_CHAR_TIMEOUT_MS)
+  {
     barcodeBuffer.trim();
-    if (barcodeBuffer.length() > 0) {
+    if (barcodeBuffer.length() > 0)
+    {
       beginScanValidation(barcodeBuffer);
     }
     barcodeBuffer = "";
   }
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(SERIAL_BAUD);
   serviceBackground(250);
   Serial.println("[BOOT] setup start");
@@ -818,29 +926,34 @@ void setup() {
   lastScreenRefreshAt = 0;
 }
 
-void loop() {
+void loop()
+{
   updateGps();
   logGpsToSerial();
   readBarcode();
   maybeSendHeartbeat();
   serviceManualRelay();
 
-  switch (currentState) {
+  switch (currentState)
+  {
   case STATE_WAIT_QR:
     // Low-battery flow sementara dimatikan.
-    if (millis() - lastScreenRefreshAt >= SCREEN_REFRESH_MS) {
+    if (millis() - lastScreenRefreshAt >= SCREEN_REFRESH_MS)
+    {
       lastScreenRefreshAt = millis();
       refreshIdleScreen();
     }
     break;
 
-  case STATE_VALIDATE_QR: {
+  case STATE_VALIDATE_QR:
+  {
     const bool awaitingCloseQr = expectedCloseQrType.length() > 0;
     resetDisplayCache();
     drawScreen("VALIDATE", activeQrCode, "Kirim ke CMS", "Mohon tunggu",
                TFT_CYAN);
 
-    if (awaitingCloseQr && !isDoorClosed()) {
+    if (awaitingCloseQr && !isDoorClosed())
+    {
       resetDisplayCache();
       drawScreen("TUTUP BOX", "Scan closed ditolak", "Pintu masih terbuka",
                  "Tutup box dulu", TFT_RED);
@@ -850,7 +963,8 @@ void loop() {
     }
 
     const ScanResponse response = sendScanRequest(activeQrCode);
-    if (!response.httpOk) {
+    if (!response.httpOk)
+    {
       resetDisplayCache();
       drawScreen("ERROR", "Gagal akses API", "Cek WiFi / URL", response.message,
                  TFT_RED);
@@ -859,7 +973,8 @@ void loop() {
       break;
     }
 
-    if (!response.valid) {
+    if (!response.valid)
+    {
       resetDisplayCache();
       drawScreen("DITOLAK", activeQrCode, response.message, "Scan QR lain",
                  TFT_RED);
@@ -870,7 +985,8 @@ void loop() {
 
     activeQrType = response.qrType;
 
-    if (response.action == "unlock") {
+    if (response.action == "unlock")
+    {
       expectedCloseQrType = response.nextQrType;
       unlockStartedAt = millis();
       doorOpenedSinceUnlock = !isDoorClosed();
@@ -880,7 +996,8 @@ void loop() {
       break;
     }
 
-    if (response.action == "complete") {
+    if (response.action == "complete")
+    {
       setRelay(false);
       resetDisplayCache();
       drawScreen("SELESAI", response.qrType, response.message,
@@ -898,19 +1015,23 @@ void loop() {
     break;
   }
 
-  case STATE_UNLOCKED: {
-    if (millis() - lastScreenRefreshAt >= SCREEN_REFRESH_MS) {
+  case STATE_UNLOCKED:
+  {
+    if (millis() - lastScreenRefreshAt >= SCREEN_REFRESH_MS)
+    {
       lastScreenRefreshAt = millis();
       refreshUnlockedScreen();
     }
 
     const bool doorClosed = isDoorClosed();
-    if (!doorClosed) {
+    if (!doorClosed)
+    {
       doorOpenedSinceUnlock = true;
     }
 
     if ((doorOpenedSinceUnlock && doorClosed) ||
-        millis() - unlockStartedAt >= UNLOCK_TIMEOUT_MS) {
+        millis() - unlockStartedAt >= UNLOCK_TIMEOUT_MS)
+    {
       setRelay(false);
       currentState = STATE_WAIT_CLOSE_QR;
       refreshWaitCloseQrScreen();
@@ -919,7 +1040,8 @@ void loop() {
   }
 
   case STATE_WAIT_CLOSE_QR:
-    if (millis() - lastScreenRefreshAt >= SCREEN_REFRESH_MS) {
+    if (millis() - lastScreenRefreshAt >= SCREEN_REFRESH_MS)
+    {
       lastScreenRefreshAt = millis();
       refreshWaitCloseQrScreen();
     }
