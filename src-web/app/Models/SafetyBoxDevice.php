@@ -16,6 +16,9 @@ class SafetyBoxDevice extends Model
         'box_id',
         'status',
         'door_status',
+        'relay_status',
+        'relay_command_pending',
+        'relay_expires_at',
         'battery_doorlock',
         'battery_device',
         'gps_location',
@@ -24,6 +27,8 @@ class SafetyBoxDevice extends Model
 
     protected $casts = [
         'door_status' => 'string',
+        'relay_command_pending' => 'boolean',
+        'relay_expires_at' => 'datetime',
         'battery_doorlock' => 'integer',
         'battery_device' => 'integer',
         'last_seen' => 'datetime',

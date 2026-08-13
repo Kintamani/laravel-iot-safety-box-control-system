@@ -13,6 +13,8 @@
                 'box_id' => $device->box_id,
                 'status' => $device->status,
                 'door_status' => $device->door_status,
+                'relay_status' => $device->relay_status ?? 'Off',
+                'relay_command_pending' => (bool) $device->relay_command_pending,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
                 'last_seen' => $device->last_seen?->diffForHumans(),
@@ -32,7 +34,7 @@
             <p class="text-xs font-mono uppercase tracking-[0.2em] text-slate-500">Lokasi GPS</p>
             <h2 class="text-xl font-semibold text-slate-900">Live Map</h2>
             <div id="device-map" class="mt-4 h-100 w-full rounded-2xl border border-slate-200"></div>
-            <p class="mt-3 text-xs text-slate-500">Update otomatis setiap 8 detik.</p>
+            <p class="mt-3 text-xs text-slate-500">Update otomatis setiap 2 detik.</p>
         </div>
 
         <div class="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm">
@@ -45,6 +47,7 @@
                         $lat = isset($coords[0]) && is_numeric($coords[0]) ? (float) $coords[0] : null;
                         $lng = isset($coords[1]) && is_numeric($coords[1]) ? (float) $coords[1] : null;
                         $doorOpen = $device->door_status === 'Open';
+                        $relayOn = ($device->relay_status ?? 'Off') === 'On';
                     @endphp
                     <div id="device-card-{{ $device->box_id }}" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                         <div class="flex items-center justify-between">
@@ -56,10 +59,10 @@
                         </div>
                         <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
                             <span class="inline-flex items-center gap-2">
-                        <span id="device-door-dot" class="h-2.5 w-2.5 rounded-full {{ $doorOpen ? 'bg-emerald-500' : ($device?->door_status === 'Closed' ? 'bg-red-500' : 'bg-slate-300') }}"></span>
-                            <span id="device-door-status" class="font-semibold text-slate-900">{{ $doorOpen ? 'Terbuka' : ($device?->door_status === 'Closed' ? 'Tertutup' : 'N/A') }}</span>
-                        </span>
-                        <span id="device-last-seen-{{ $device->box_id }}">Last seen:{{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
+                                <span id="device-door-dot-{{ $device->box_id }}" class="h-2.5 w-2.5 rounded-full {{ $doorOpen ? 'bg-emerald-500' : ($device?->door_status === 'Closed' ? 'bg-red-500' : 'bg-slate-300') }}"></span>
+                                <span id="device-door-status-{{ $device->box_id }}" class="font-semibold text-slate-900">{{ $doorOpen ? 'Terbuka' : ($device?->door_status === 'Closed' ? 'Tertutup' : 'N/A') }}</span>
+                            </span>
+                            <span id="device-last-seen-{{ $device->box_id }}">Last seen: {{ $device->last_seen?->diffForHumans() ?? 'N/A' }}</span>
                         </div>
                         <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
                             <span id="device-battery-doorlock-{{ $device->box_id }}">Battery Doorlock:
@@ -78,6 +81,22 @@
                                     GPS belum fix
                                 @endif
                             </span>
+                        </div>
+
+                         <div class="mt-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                            <span id="device-relay-status-{{ $device->box_id }}" class="text-xs font-semibold {{ $relayOn ? 'text-emerald-700' : 'text-slate-500' }}">
+                                Relay: {{ $relayOn ? 'ON' : 'OFF' }}
+                            </span>
+                            <label class="relative inline-flex cursor-pointer items-center">
+                                <input type="checkbox"
+                                    id="device-relay-switch-{{ $device->box_id }}"
+                                    data-box-id="{{ $device->box_id }}"
+                                    role="switch"
+                                    class="peer sr-only"
+                                    @checked($relayOn)
+                                    aria-label="Turn on relay 5 detik">
+                                <span class="h-6 w-11 rounded-full bg-slate-300 transition after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition peer-checked:bg-blue-600 peer-checked:after:translate-x-5 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-500 peer-disabled:cursor-wait peer-disabled:opacity-60"></span>
+                            </label>
                         </div>
                     </div>
                 @empty
@@ -256,12 +275,19 @@
             return 'N/A';
         }
 
+        function relayStatusLabel(device) {
+            if (device.relay_command_pending) return 'PENDING';
+            return device.relay_status === 'On' ? 'ON' : 'OFF';
+        }
+
         function updateDeviceCards(devices) {
             devices.forEach(device => {
                 const boxId = device.box_id;
                 const statusEl = document.getElementById(`device-status-${boxId}`);
                 const doorDotEl = document.getElementById(`device-door-dot-${boxId}`);
                 const doorStatusEl = document.getElementById(`device-door-status-${boxId}`);
+                const relayStatusEl = document.getElementById(`device-relay-status-${boxId}`);
+                const relaySwitchEl = document.getElementById(`device-relay-switch-${boxId}`);
                 const doorlockEl = document.getElementById(`device-battery-doorlock-${boxId}`);
                 const deviceBatteryEl = document.getElementById(`device-battery-device-${boxId}`);
                 const locationEl = document.getElementById(`device-location-${boxId}`);
@@ -277,6 +303,17 @@
 
                 if (doorStatusEl) {
                     doorStatusEl.textContent = doorStatusLabel(device.door_status);
+                }
+
+                if (relayStatusEl) {
+                    const relayOn = device.relay_status === 'On';
+                    relayStatusEl.textContent = `Relay: ${relayStatusLabel(device)}`;
+                    relayStatusEl.className = `text-xs font-semibold ${device.relay_command_pending ? 'text-amber-600' : relayOn ? 'text-emerald-700' : 'text-slate-500'}`;
+                }
+
+                if (relaySwitchEl) {
+                    relaySwitchEl.checked = device.relay_status === 'On' || Boolean(device.relay_command_pending);
+                    relaySwitchEl.disabled = device.relay_status === 'On' || Boolean(device.relay_command_pending);
                 }
 
                 if (doorlockEl) {
@@ -314,7 +351,7 @@
                 if (!device.lat || !device.lng) {
                     return;
                 }
-                const label = `${device.box_id} • ${device.status} • Door ${device.door_status ?? 'N/A'} • Batt ${device.battery_doorlock ?? '--'}%/${device.battery_device ?? '--'}%`;
+                const label = `${device.box_id} • ${device.status} • Door ${device.door_status ?? 'N/A'} • Relay ${device.relay_status ?? 'Off'} • Batt ${device.battery_doorlock ?? '--'}%/${device.battery_device ?? '--'}%`;
                 if (markers.has(device.box_id)) {
                     markers.get(device.box_id).setLatLng([device.lat, device.lng]).bindPopup(label);
                 } else {
@@ -327,6 +364,47 @@
         setViewFromDevices(initialDevices);
         updateMarkers(initialDevices);
         updateDeviceCards(initialDevices);
+
+        document.querySelectorAll('[id^="device-relay-switch-"]').forEach(relaySwitch => {
+            relaySwitch.addEventListener('change', async () => {
+                const boxId = relaySwitch.dataset.boxId;
+                const relayStatusEl = document.getElementById(`device-relay-status-${boxId}`);
+
+                if (!relaySwitch.checked) {
+                    relaySwitch.checked = true;
+                    return;
+                }
+
+                relaySwitch.disabled = true;
+                if (relayStatusEl) {
+                    relayStatusEl.textContent = 'Relay: PENDING';
+                    relayStatusEl.className = 'text-xs font-semibold text-amber-600';
+                }
+
+                try {
+                    const response = await fetch(`/api/devices/${encodeURIComponent(boxId)}/relay-on`, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.ok) {
+                        throw new Error(data.message ?? 'Relay command failed');
+                    }
+                    await refreshDevices();
+                } catch (error) {
+                    console.error(error);
+                    relaySwitch.checked = false;
+                    relaySwitch.disabled = false;
+                    if (relayStatusEl) {
+                        relayStatusEl.textContent = 'Relay: ERROR';
+                        relayStatusEl.className = 'text-xs font-semibold text-red-600';
+                    }
+                }
+            });
+        });
 
         async function refreshDevices() {
             try {
@@ -341,7 +419,7 @@
             }
         }
 
-        setInterval(refreshDevices, 8000);
+        setInterval(refreshDevices, 2000);
 
         let accessLogAbortController = null;
 

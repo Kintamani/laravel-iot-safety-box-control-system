@@ -21,6 +21,15 @@ class DashboardController extends Controller
             ->get();
 
         $devices = SafetyBoxDevice::orderBy('box_id')->get();
+        $devices->each(function (SafetyBoxDevice $device) {
+            if ($device->relay_expires_at && $device->relay_expires_at->lte(now())) {
+                $device->forceFill([
+                    'relay_status' => 'Off',
+                    'relay_command_pending' => false,
+                    'relay_expires_at' => null,
+                ])->save();
+            }
+        });
 
         $search = trim((string) $request->input('search', ''));
         $orderSearch = ltrim($search, '#');

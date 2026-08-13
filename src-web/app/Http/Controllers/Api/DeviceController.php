@@ -28,24 +28,63 @@ class DeviceController extends Controller
             'lng' => ['nullable', 'numeric'],
             'status' => ['nullable', 'in:Available,In Use'],
             'door_status' => ['nullable', 'in:Open,Closed'],
+            'relay_status' => ['nullable', 'in:On,Off'],
         ]);
 
-        $device = SafetyBoxDevice::updateOrCreate(
-            ['box_id' => $data['box_id']],
-            [
-                'battery_doorlock' => $data['battery_doorlock'] ?? null,
-                'battery_device' => $data['battery_device'] ?? null,
-                'gps_location' => $this->formatLocation($data['lat'] ?? null, $data['lng'] ?? null),
-                'status' => $data['status'] ?? 'Available',
-                'door_status' => $data['door_status'] ?? null,
-                'last_seen' => now(),
-            ]
-        );
+        $device = SafetyBoxDevice::firstOrNew(['box_id' => $data['box_id']]);
+        $device->fill([
+            'battery_doorlock' => $data['battery_doorlock'] ?? null,
+            'battery_device' => $data['battery_device'] ?? null,
+            'gps_location' => $this->formatLocation($data['lat'] ?? null, $data['lng'] ?? null),
+            'status' => $data['status'] ?? 'Available',
+            'door_status' => $data['door_status'] ?? null,
+            'last_seen' => now(),
+        ]);
+
+        if (array_key_exists('relay_status', $data)) {
+            $device->relay_status = $data['relay_status'];
+        }
+
+        if ($device->relay_expires_at && $device->relay_expires_at->lte(now())) {
+            $device->relay_status = 'Off';
+            $device->relay_command_pending = false;
+            $device->relay_expires_at = null;
+        }
+
+        $relayCommand = null;
+        if ($device->relay_command_pending) {
+            $relayCommand = [
+                'action' => 'turn_on_relay',
+                'duration_ms' => 5000,
+            ];
+            $device->relay_status = 'On';
+            $device->relay_command_pending = false;
+            $device->relay_expires_at = now()->addSeconds(5);
+        }
+
+        $device->save();
 
         return response()->json([
             'ok' => true,
             'box_id' => $device->box_id,
+            'relay_status' => $device->relay_status ?? 'Off',
+            'relay_command' => $relayCommand,
             'server_time' => $this->isoTimestamp(now()),
+        ]);
+    }
+
+    public function relayOn(SafetyBoxDevice $device): JsonResponse
+    {
+        $device->update([
+            'relay_command_pending' => true,
+            'relay_expires_at' => null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'box_id' => $device->box_id,
+            'relay_status' => $device->relay_status ?? 'Off',
+            'relay_command_pending' => true,
         ]);
     }
 
@@ -122,12 +161,22 @@ class DeviceController extends Controller
     public function devices(): JsonResponse
     {
         $devices = SafetyBoxDevice::orderBy('box_id')->get()->map(function (SafetyBoxDevice $device) {
+            if ($device->relay_expires_at && $device->relay_expires_at->lte(now())) {
+                $device->forceFill([
+                    'relay_status' => 'Off',
+                    'relay_command_pending' => false,
+                    'relay_expires_at' => null,
+                ])->save();
+            }
+
             [$lat, $lng] = $this->parseLocation($device->gps_location);
 
             return [
                 'box_id' => $device->box_id,
                 'status' => $device->status,
                 'door_status' => $device->door_status,
+                'relay_status' => $device->relay_status ?? 'Off',
+                'relay_command_pending' => (bool) $device->relay_command_pending,
                 'battery_doorlock' => $device->battery_doorlock,
                 'battery_device' => $device->battery_device,
                 'last_seen' => $this->formatLastSeen($device->last_seen) ?? '-',
