@@ -14,9 +14,16 @@ Optional: set `DEVICE_API_KEY` di `.env` lalu kirim header `X-Device-Key` dari d
 ### Endpoint perangkat
 - `POST /api/device/heartbeat`
 - `POST /api/device/scan`
-- `POST /api/device/lock`
 - `GET /api/devices`
 - `GET /api/orders/{order}`
+
+### Payload heartbeat
+- `box_id`
+- `battery_doorlock`
+- `battery_device`
+- `status` (`Available` / `In Use`)
+- `door_status` (`Open` / `Closed`)
+- `lat`, `lng` bila GPS valid
 
 ---
 
